@@ -1,107 +1,131 @@
 'use client';
-import { useState } from 'react';
-import { createClient } from '../utils/supabase/client';
 
-export default function NewCard() {
-  // 入力された文字を保存しておく箱（ステート）
-  const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/app/utils/supabase/client';
+import Link from 'next/link';
+
+export default function NewCardPage() {
+  const [front, setFront] = useState('');
+  const [back, setBack] = useState('');
+  const [decks, setDecks] = useState<any[]>([]);
+  const [selectedDeckId, setSelectedDeckId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  const router = useRouter();
   const supabase = createClient();
 
-  // 「登録する」ボタンを押したときの処理
+  // 画面が開いたときに、単語帳（decks）の一覧を取ってくる
+  useEffect(() => {
+    const fetchDecks = async () => {
+      const { data, error } = await supabase.from('decks').select('*');
+      if (data && data.length > 0) {
+        setDecks(data);
+        setSelectedDeckId(data[0].id); // 最初に見つかった単語帳をデフォルトで選択状態にする
+      }
+    };
+    fetchDecks();
+  }, [supabase]);
+
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); // ボタンを押した時に画面がリロードされるのを防ぐ
+    e.preventDefault();
+    // 入力漏れや、単語帳が選ばれていない場合はストップ
+    if (!front || !back || !selectedDeckId) {
+      alert("問題、答え、単語帳をすべて入力・選択してください！");
+      return;
+    }
     
-    // どっちかが空っぽならストップ
-    if (!question || !answer) {
-      alert('問題と答えを両方入力してね！');
-      return;
-    }
+    setIsSubmitting(true);
 
-    setIsSubmitting(true); // 連打防止のために「送信中」状態にする
+    // Supabaseに送信！（deck_idを追加して迷子を防ぐ）
+    const { error } = await supabase
+      .from('cards') // ※もしテーブル名が違う場合は書き換えてください
+      .insert([
+        { 
+          front_text: front, // ※もしカラム名が違う場合は書き換えてください
+          back_text: back,   // ※もしカラム名が違う場合は書き換えてください
+          deck_id: selectedDeckId 
+        }
+      ]);
 
-    // 1. 保存先の「単語帳（deck）」を探す（今回はテスト単語帳のIDを取得）
-    const { data: deck } = await supabase.from('decks').select('id').limit(1).single();
-
-    if (!deck) {
-      alert('単語帳が見つかりません！先に単語帳を作る必要があります。');
-      setIsSubmitting(false);
-      return;
-    }
-
-    // 2. データベースの cards テーブルに単語を保存！
-    const { error } = await supabase.from('cards').insert({
-      deck_id: deck.id,
-      question: question,
-      answer: answer,
-    });
-
-    if (error) {
-      alert('保存に失敗しました...');
-      console.error(error);
+    if (!error) {
+      // 成功したら入力欄を空にして、選んだ単語帳の画面に戻る
+      setFront('');
+      setBack('');
+      router.push(`/deck/${selectedDeckId}`); 
+      router.refresh();
     } else {
-      alert(`「${question}」を登録しました！✨`);
-      // 次の単語をすぐ登録できるように、入力欄を空っぽに戻す
-      setQuestion('');
-      setAnswer('');
+      console.error(error);
+      alert('エラーが発生しました');
+      setIsSubmitting(false);
     }
-    
-    setIsSubmitting(false); // 「送信中」状態を解除
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
-        <h1 className="text-2xl font-bold mb-6 text-gray-700 text-center">新しい単語を登録</h1>
-
-        {/* 登録フォーム */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <div className="p-4 max-w-md mx-auto">
+      <div className="bg-white p-6 rounded-xl shadow-md border-2 border-gray-100">
+        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">新しい単語を登録</h1>
+        
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           
-          {/* 問題の入力欄 */}
+          {/* ▼ 追加したドロップダウン ▼ */}
           <div>
-            <label className="block text-sm font-bold text-gray-500 mb-1">問題（おもて）</label>
+            <label className="block text-sm font-bold text-gray-700 mb-1">保存先の単語帳</label>
+            <select 
+              value={selectedDeckId}
+              onChange={(e) => setSelectedDeckId(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg text-black bg-gray-50 focus:outline-none focus:border-blue-500"
+              required
+            >
+              {decks.length === 0 && <option value="">単語帳がありません</option>}
+              {decks.map((deck) => (
+                <option key={deck.id} value={deck.id}>
+                  {deck.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">問題（おもて）</label>
             <input
               type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
+              value={front}
+              onChange={(e) => setFront(e.target.value)}
               placeholder="例：JavaScript"
-              className="w-full border-2 border-gray-200 rounded-xl p-3 text-lg focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full p-3 border border-gray-300 rounded-lg text-black focus:outline-none focus:border-blue-500"
+              required
             />
           </div>
 
-          {/* 答えの入力欄 */}
           <div>
-            <label className="block text-sm font-bold text-gray-500 mb-1">答え（うら）</label>
+            <label className="block text-sm font-bold text-gray-700 mb-1">答え（うら）</label>
             <input
               type="text"
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
+              value={back}
+              onChange={(e) => setBack(e.target.value)}
               placeholder="例：ジャバスクリプト"
-              className="w-full border-2 border-gray-200 rounded-xl p-3 text-lg focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full p-3 border border-gray-300 rounded-lg text-black focus:outline-none focus:border-blue-500"
+              required
             />
           </div>
 
-          {/* 登録ボタン */}
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={`mt-4 w-full text-white font-bold py-4 rounded-xl shadow-md transition-all ${
-              isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 active:scale-95'
+          <button 
+            type="submit" 
+            disabled={isSubmitting || decks.length === 0}
+            className={`w-full py-3 mt-2 rounded-lg font-bold text-white transition-colors ${
+              isSubmitting || decks.length === 0 ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-md'
             }`}
           >
             {isSubmitting ? '登録中...' : '単語帳に追加する！'}
           </button>
         </form>
 
-        {/* メイン画面に戻るリンク */}
         <div className="mt-6 text-center">
-          <a href="/" className="text-blue-500 hover:underline text-sm font-bold">
-            ← 学習画面に戻る
-          </a>
+          <button onClick={() => router.back()} className="text-blue-500 hover:underline font-medium">
+            ← 前の画面に戻る
+          </button>
         </div>
-
       </div>
     </div>
   );
