@@ -1,28 +1,27 @@
 // app/folders/[id]/page.tsx
 import { createClient } from '@/app/utils/supabase/client';
 import Link from 'next/link';
+import CreateDeckButton from './CreateDeckButton'; // 👈 これを追加！
 
 export default async function FolderDetailPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
   const folderId = params.id;
 
-  // 1. フォルダ情報を取得（名前を表示するため）
   const { data: folder } = await supabase
     .from('folders')
     .select('name')
     .eq('id', folderId)
     .single();
 
-  // 2. そのフォルダに紐づく単語帳（decks）だけを取得
   const { data: decks } = await supabase
     .from('decks')
     .select('*')
-    .eq('folder_id', folderId); // ここがポイント！
+    .eq('folder_id', folderId);
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <div className="mb-6">
-        <Link href="/folders" className="text-blue-500">← フォルダ一覧へ戻る</Link>
+        <Link href="/folders" className="text-blue-500 hover:underline">← フォルダ一覧へ戻る</Link>
         <h1 className="text-2xl font-bold mt-2">📂 {folder?.name}</h1>
       </div>
 
@@ -30,16 +29,15 @@ export default async function FolderDetailPage({ params }: { params: { id: strin
         {decks?.map((deck) => (
           <Link 
             key={deck.id} 
-            href={`/deck/${deck.id}`} // ここは以前作った単語帳詳細へ
-            className="p-4 bg-gray-50 border rounded-lg hover:bg-white transition-all shadow-sm block"
+            href={`/deck/${deck.id}`}
+            className="p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-green-400 transition-colors shadow-sm block text-black"
           >
-            <h2 className="font-bold">{deck.title}</h2>
+            <h2 className="font-bold text-lg">📝 {deck.title}</h2>
           </Link>
         ))}
         
-        <button className="mt-4 w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500">
-          ＋ このフォルダに単語帳を追加
-        </button>
+        {/* 👈 ダミーボタンを消して、これに差し替え！ folderIdを渡すのがポイントです */}
+        <CreateDeckButton folderId={folderId} />
       </div>
     </div>
   );
