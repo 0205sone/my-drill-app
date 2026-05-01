@@ -1,4 +1,5 @@
 // app/folders/page.tsx
+export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { createClient } from '@/app/utils/supabase/client';
 import CreateFolderButton from './CreateFolderButton'; // さっき作ったやつを呼ぶ
